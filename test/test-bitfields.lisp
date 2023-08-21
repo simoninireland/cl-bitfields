@@ -2,23 +2,23 @@
 ;;
 ;; Copyright (C) 2023 Simon Dobson
 ;;
-;; This file is part of cl-vhdsl, a Common Lisp DSL for hardware design
+;; This file is part of cl-bitfields, Common Lisp DSL macros for bitfields
 ;;
-;; cl-vhdsl is free software: you can redistribute it and/or modify
+;; cl-bitfields is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 ;;
-;; cl-vhdsl is distributed in the hope that it will be useful,
+;; cl-bitfields is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with cl-vhdsl. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;; along with cl-bitfields. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :cl-vhdsl/test)
-(in-suite cl-vhdsl)
+(in-package :cl-bitfields/test)
+(in-suite cl-bitfields)
 
 
 ;; ---------- Extracting symbols from bitfield patterns ----------
@@ -26,64 +26,64 @@
 (test test-symbols
   "Test we can extract symbols from a pattern."
   ;; null patterns
-  (is (null (cl-vhdsl::extract-symbols '())))
-  (is (null (cl-vhdsl::extract-symbols '(0))))
-  (is (null (cl-vhdsl::extract-symbols '(1))))
-  (is (null (cl-vhdsl::extract-symbols '(-))))
-  (is (null (cl-vhdsl::extract-symbols '(0 1))))
-  (is (null (cl-vhdsl::extract-symbols '(0 - 1))))
+  (is (null (cl-bitfields::extract-symbols '())))
+  (is (null (cl-bitfields::extract-symbols '(0))))
+  (is (null (cl-bitfields::extract-symbols '(1))))
+  (is (null (cl-bitfields::extract-symbols '(-))))
+  (is (null (cl-bitfields::extract-symbols '(0 1))))
+  (is (null (cl-bitfields::extract-symbols '(0 - 1))))
 
   ;; single symbols (including weird ones)
-  (is (equal (cl-vhdsl::extract-symbols '(x)) '(x)))
-  (is (equal (cl-vhdsl::extract-symbols '(x 0)) '(x)))
-  (is (equal (cl-vhdsl::extract-symbols '(*)) '(*)))
+  (is (equal (cl-bitfields::extract-symbols '(x)) '(x)))
+  (is (equal (cl-bitfields::extract-symbols '(x 0)) '(x)))
+  (is (equal (cl-bitfields::extract-symbols '(*)) '(*)))
 
   ;; multiple symbols
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(x y)) '(x y))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(0 x y)) '(x y))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(x 0 y)) '(x y))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(x y -)) '(x y))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(x x y y y)) '(x y))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(x y)) '(x y))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(0 x y)) '(x y))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(x 0 y)) '(x y))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(x y -)) '(x y))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(x x y y y)) '(x y))))
 
   ;; symbols with width specifiers
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '((x 3) 0)) '(x))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(z (x 3) y)) '(x y z))))
-  (is (null (set-exclusive-or (cl-vhdsl::extract-symbols '(z (x 3) x)) '(x z)))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '((x 3) 0)) '(x))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(z (x 3) y)) '(x y z))))
+  (is (null (set-exclusive-or (cl-bitfields::extract-symbols '(z (x 3) x)) '(x z)))))
 
 
 (test test-bad-symbols
   "Test that meaningless elements in a bitfield pattern throw an error."
   ;; string, not symbol
   (signals error
-    (cl-vhdsl::extract-symbols '(x y "hello")))
+    (cl-bitfields::extract-symbols '(x y "hello")))
 
   ;; non-bit value
   (signals error
-    (cl-vhdsl::extract-symbols '(2 - -)))
+    (cl-bitfields::extract-symbols '(2 - -)))
 
   ;; non-symbol leading a width specifier
   (signals error
-    (cl-vhdsl::extract-symbols '((2 1)))))
+    (cl-bitfields::extract-symbols '((2 1)))))
 
 
 ;; ---------- Extracting bits ----------
 
 (test test-bit
   "Test we can extract single bits."
-  (is (equal (cl-vhdsl::extract-bits 0 1 0) 0))
-  (is (equal (cl-vhdsl::extract-bits 0 1 1) 1))
-  (is (equal (cl-vhdsl::extract-bits 1 1 1) 0))
-  (is (equal (cl-vhdsl::extract-bits 3 1 #2r1000) 1))
-  (is (equal (cl-vhdsl::extract-bits 5 1 #2r1000) 0)))
+  (is (equal (cl-bitfields::extract-bits 0 1 0) 0))
+  (is (equal (cl-bitfields::extract-bits 0 1 1) 1))
+  (is (equal (cl-bitfields::extract-bits 1 1 1) 0))
+  (is (equal (cl-bitfields::extract-bits 3 1 #2r1000) 1))
+  (is (equal (cl-bitfields::extract-bits 5 1 #2r1000) 0)))
 
 
 (test test-bits
   "Test we can extract multiple bits."
-  (is (equal (cl-vhdsl::extract-bits 0 1 0) 0))
-  (is (equal (cl-vhdsl::extract-bits 0 1 1) 1))
-  (is (equal (cl-vhdsl::extract-bits 1 1 1) 0))
-  (is (equal (cl-vhdsl::extract-bits 4 3 #2r11100) #2r111))
-  (is (equal (cl-vhdsl::extract-bits 2 2 #2r11100) #2r10)))
+  (is (equal (cl-bitfields::extract-bits 0 1 0) 0))
+  (is (equal (cl-bitfields::extract-bits 0 1 1) 1))
+  (is (equal (cl-bitfields::extract-bits 1 1 1) 0))
+  (is (equal (cl-bitfields::extract-bits 4 3 #2r11100) #2r111))
+  (is (equal (cl-bitfields::extract-bits 2 2 #2r11100) #2r10)))
 
 
 ;; ---------- Pattern compression ----------
@@ -91,39 +91,39 @@
 (test test-pattern-compression
   "Test the pattern compression logic."
   ;; no action
-  (is (equal (cl-vhdsl::compress-pattern '(x y z))
+  (is (equal (cl-bitfields::compress-pattern '(x y z))
 	     '(x y z)))
-  (is (equal (cl-vhdsl::compress-pattern '(x y x))
+  (is (equal (cl-bitfields::compress-pattern '(x y x))
 	     '(x y x)))
-  (is (equal (cl-vhdsl::compress-pattern '(x 1 - x))
+  (is (equal (cl-bitfields::compress-pattern '(x 1 - x))
 	     '(x 1 - x)))
-  (is (equal (cl-vhdsl::compress-pattern '((x 4) y x))
+  (is (equal (cl-bitfields::compress-pattern '((x 4) y x))
 	     '((x 4) y x)))
-  (is (equal (cl-vhdsl::compress-pattern '((x 4) y (x 3)))
+  (is (equal (cl-bitfields::compress-pattern '((x 4) y (x 3)))
 	     '((x 4) y (x 3))))
 
   ;; sequences
-  (is (equal (cl-vhdsl::compress-pattern '(x x x))
+  (is (equal (cl-bitfields::compress-pattern '(x x x))
 	     '((x 3))))
-  (is (equal (cl-vhdsl::compress-pattern '(x x y))
+  (is (equal (cl-bitfields::compress-pattern '(x x y))
 	     '((x 2) y)))
-  (is (equal (cl-vhdsl::compress-pattern '((x 2) (x 3) y))
+  (is (equal (cl-bitfields::compress-pattern '((x 2) (x 3) y))
 	     '((x 5) y)))
-  (is (equal (cl-vhdsl::compress-pattern '((x 2) x x))
+  (is (equal (cl-bitfields::compress-pattern '((x 2) x x))
 	     '((x 4))))
-  (is (equal (cl-vhdsl::compress-pattern '(y - (x 2) (x 3) y))
+  (is (equal (cl-bitfields::compress-pattern '(y - (x 2) (x 3) y))
 	     '(y - (x 5) y)))
 
   ;; sequences with unknown (run-time) widths
-  (is (equal (cl-vhdsl::compress-pattern '((x n) x y))
+  (is (equal (cl-bitfields::compress-pattern '((x n) x y))
 	     '((x (1+ n)) y)))
-  (is (equal (cl-vhdsl::compress-pattern '(x (x n) y))
+  (is (equal (cl-bitfields::compress-pattern '(x (x n) y))
 	     '((x (1+ n)) y)))
-  (is (equal (cl-vhdsl::compress-pattern '(x (y n) z))
+  (is (equal (cl-bitfields::compress-pattern '(x (y n) z))
 	     '(x (y n) z)))
-  (is (equal (cl-vhdsl::compress-pattern '((x n) x (x n) y))
+  (is (equal (cl-bitfields::compress-pattern '((x n) x (x n) y))
 	     '((x (+ n (1+ n))) y)))
-  (is (equal (cl-vhdsl::compress-pattern '((x n) (x m) y))
+  (is (equal (cl-bitfields::compress-pattern '((x n) (x m) y))
 	     '((x (+ n m)) y))))
 
 

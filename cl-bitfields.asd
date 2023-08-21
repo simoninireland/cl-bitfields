@@ -1,4 +1,4 @@
-;; cl-vhdsl.lisp: Package definition for cl-bitfields
+;; cl-bitfields.asd: ASDF system definition for cl-bitfields
 ;;
 ;; Copyright (C) 2023 Simon Dobson
 ;;
@@ -17,8 +17,20 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with cl-bitfields. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(defpackage cl-bitfields
-  (:use :cl)
-  (:export #:with-bitfields))
+(defsystem "cl-bitfields"
+  :description "Macros for manipulating bitfields in Common Lisp"
+  :author "Simon Dobson <simoninireland@gmail.com"
+  :version (:read-file-form "version.sexp")
+  :license "GPL3"
+  :depends-on ("alexandria")
+  :pathname "src/"
+  :components ((:file "package")
+	       (:file "bitfields"))
+  :in-order-to ((test-op (test-op "cl-bitfields/test"))))
 
-(in-package :cl-bitfields)
+(defsystem "cl-bitfields/test"
+  :depends-on ("cl-bitfields" "fiveam")
+  :pathname "test/"
+  :components ((:file "package")
+	       (:file "test-bitfields"))
+  :perform (test-op (o c) (uiop:symbol-call :fiveam '#:run-all-tests)))
