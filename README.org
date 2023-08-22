@@ -10,13 +10,138 @@
   operations in a Lisp-like fashion:
 
   - ~with-bitfields~ :: A destructuring bind of a bitfield pattern
-    into variable that are in scope for the body forms;
+    into new variables that are in scope for the body forms;
   - ~make-bitfields~ :: The opposite operation, constructing a
     bitfield value from a pattern using variables already existing;
     and
   - ~with-bitfields-f~ :: A combination of both that writes any
     changes made to the variables in the pattern back into the value
     that was destructured.
+
+** ~with-bitfields~: Destructuring bind of bitfields
+
+*** Static fields
+
+    The simplest form of destructuring bitfields is:
+
+    #+begin_src lisp
+(with-bitfields (1 1 0 x x x y y) opcode
+  (princ x))
+    #+end_src
+
+    The pattern ~(1 1 0 x x x y y)~ denotes a bitfield, most
+    significant bit on the left. The three most significant bits of
+    the pattern are fixed as #2r110; the next three bits are
+    identified by a variable ~x~; and the two least significant bits
+    are identified by ~y~. This pattern is matched against the
+    expression ~opcode~, and the variables ~x~ and ~y~ are then in
+    scope for the body forms. The value of the construct is the value
+    of the last body form.
+
+    If the corresponding bits of ~opcode~ do not match the fixed bits
+    of the pattern (#2r110) then the destructuring fails and the value
+    of the construct is ~nil~.
+
+*** Non-consecutive bitfields
+
+    The same variable can appear non-consecutively, for example:
+
+    #+begin_src lisp
+(with-bitfields (1 1 0 x x y y x) opcode
+  (princ x))
+    #+end_src
+
+    The value of ~x~ is taken from the bits in the corresponding
+    positions. The above pattern, when matched against #2r11011101,
+    would assign #2r111 to ~x~.
+
+*** Don't-care bits
+
+    As well as 1 and 0, the character - in a pattern matches /any/
+    single bit: a "don't care" that won't stop a pattern from
+    matching. The pattern ~(- 1 0 x x x y y)~ would match #2r01011100
+    or #2r11011100, for example: the value of the first bit is a
+    don't-care.
+
+*** Width specifiers
+
+    Having the repeated occurrences of ~x~ and ~y~ are often useful
+    because they make the destructuring of the bitfield obvious. They
+    can however be hard to read in some cases, so patterns with
+    several consecutive bits being bound can also be phrased in terms
+    of /field width specifiers/:
+
+    #+begin_src lisp
+(with-bitfields (1 1 0 (x 3) (y 2)) opcode
+  (princ x))
+    #+end_src
+
+    This is the same pattern as the first. The two forms can be freely
+    mixed:
+
+    #+begin_src lisp
+(with-bitfields (1 1 0 (x 3) y y) opcode
+  (princ x))
+    #+end_src
+
+*** Variable-width fields
+
+    In the above scenarios the number of bits being destructured, and
+    their mapping to variables, is known at compile-time. Sometimes
+    it's not possible to do this: the widths of fields may only be
+    known at run-time. Width specifiers can therefore include
+    /computed/ widths determined at run-time:
+
+    #+begin_src lisp
+(let ((v 3))
+  (with-bitfields (1 1 0 (x v) y y) opcode
+    (princ x)))
+    #+end_src
+
+    This pattern is the same as the ones above: ~x~ is in this case
+    three bits wide, but this is only determined at run-time and could
+    be changed by changing ~v~.
+
+    The computed widths can be arbitrary forms:
+
+    #+begin_src lisp
+(let ((v 2))
+  (with-bitfields (1 1 0 (x (1+ v) (y v) opcode
+    (princ x)))
+    #+end_src
+
+    These forms are computed once left-to-right, respecting any
+    side-effects.
+
+** ~make-bitfields~: Create values from bitfields
+
+   ~make-bitfields~ uses the same style as ~with-bitfields~ to create
+   a value from bits taken from variables in scope. The patterns
+   available are the same as those used by ~with-bitfields~, with the
+   single difference that - (don't care) bits can't appear.
+
+   The form:
+
+   #+begin_src lisp
+(let ((x #2r10110)
+      (y #2r10))
+  (make-bitfields (x x y y x x x 1)))
+   #+end_src
+
+   will return the value #2r10101101: the three highest-order bits of
+   ~x~, followed by the two highest-order bits from ~y~, followed by the
+   lowest-order bit of ~x~, followed by 1.
+
+** ~with-bitfields-f~: Destructure and update bitfields
+
+   ~with-bitfields-f~ acts rather like a combination of a
+   destructuring bind using ~with-bitfields~ followed by an update
+   in-place of the value that was destructured in the form of
+   ~make-bitfields~. Changes made to the variables captured in the
+   destructuring pattern are applied back to the value from which they
+   were destructured.
+
+   ...
 
 
 ** Author
