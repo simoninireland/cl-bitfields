@@ -1,3 +1,4 @@
+;; bitfields.lisp -- Bitfield manipulation
 ;;
 ;; Copyright (C) 2023 Simon Dobson
 ;;
@@ -207,7 +208,7 @@ re-written, since such references can't generate side-effects."
 		     (cadr rest)))))))
 
 
-(defun generate-match-bitfield-code (pattern var escape)
+(defun generate-with-bitfields (pattern var escape)
   "Construct a matching for PATTERN against variable VAR.
 
 This function is the main code generator for
@@ -258,7 +259,7 @@ return from the block designated by ESCAPE."
 		     `(- ,bits ,@computed)
 		     `(- ,bits ,known ,@computed))))
 
-	   ;; generate the call to `extract-bits`
+	   ;; generate the call to `extract-bits'
 	   (generate-extract (bits wanted known computed)
 	     (if (numberp bits)
 		 ;; known width, implies no computation and all numbers
@@ -295,6 +296,108 @@ return from the block designated by ESCAPE."
 		  calc
 		  `((let* ,(cadr relabels)   ; let* just in case the sequening really matters
 		       ,@calc)))))))))
+
+
+(defun extract-relabelling (l)
+  "Generate relabellings for the variables in L.
+
+The patterns are the same as for `make-bitfields', with the difference
+that - (don't-care) bits aren't allowed.
+
+The relabellings are returned as a list of elements of the form (v nv)
+where nv is a new variable taking the value of variable v. The list
+acts as an alist to look-up the new names of variables; when the pairs
+are reversed, it is suitable for creating the corresponding
+let-bindings."
+  (if (null l)
+      '()
+      (let ((syms (extract-relabelling (cdr l)))
+	    (s (car l)))
+	(cond ((member s '(1 0))
+	       ;; explicit bits don't generate bindings
+	       syms)
+	      ((equal s '-)
+	       ;; "don't care" bits not allowed
+	       (error "- cannot appear in a make-bitfields pattern"))
+	      ((symbolp s)
+	       ;; variable references
+	       (if (assoc s syms)
+		   syms
+		   (let ((x (gensym)))
+		     (cons (list s x) syms))))
+	      ((listp s)
+	       ;; width specifiers
+	       (if (assoc (car s) syms)
+		   syms
+		   (let ((x (gensym)))
+		     (cons (list (car s) x) syms))))
+	      (t
+	       (error "~S cannot appear in bitfield pattern" s))))))
+
+
+(defun generate-make-bitfields (pattern var vars)
+  "Construct to create the value described in PATTERN.
+
+This is the main code generator for `make-bitfields'. VARS is an alist
+mapping program variables to new variables, allowing the variables to
+be changed as the bitfield value is built. VAR is the working variable
+for the bitfield being built."
+  (labels ((make-bit (pat consumed)
+	     (if (null pat)
+		 '()
+		 (let* ((p (car pat))
+			(exs (make-bit (cdr pat) consumed)))
+		   (if (listp p)
+		       ;; width specifier
+		       (let* ((n (car p))
+			      (nv (lookup-new-variable n))
+			      (w (cadr p))
+
+			      ;; optimise the cases where the widths are known
+			      (mask (if (numberp w)
+					(1- (ash 1 w))
+					`(1- (ash 1 ,w))))
+			      (shift (if (numberp w)
+					 (- w)
+					 `(- ,w))))
+			 (append exs (list `(setq ,var (logior ,var
+							       (ash (logand ,nv ,mask) ,consumed)))
+					   `(setq ,nv (ash ,nv ,shift))
+					   `(setq ,consumed (+ ,consumed ,w)))))
+
+		       ;; single-bit match
+		       (case p
+			 ;; 0 simply shifts the number of known bits
+			 (0
+			  (append exs
+				  (list `(setq ,consumed (1+ ,consumed)))))
+
+			 ;; one
+			 (1
+			  (append exs
+				  (list `(setq ,var (logior ,var (ash 1 ,consumed)))
+					`(setq ,consumed (1+ ,consumed)))))
+
+			 ;; symbol has bit extracted
+			 (otherwise
+			  (let ((nv (cadr (assoc p vars))))
+			    (append exs
+				    (list `(setq ,var (logior ,var
+							      (ash  (logand ,nv 1) ,consumed)))
+					  `(setq ,nv (ash ,nv -1))
+					  `(setq ,consumed (1+ ,consumed)))))))))))
+
+	   ;; look-up the new corresponding to the old one
+	   (lookup-new-variable (n)
+	     (cadr (assoc n vars))))
+
+    (let* ((relabels (relabel-pattern-width-specifiers pattern)) ; extract computed widths as variables
+	   (cpattern (compress-pattern (car relabels)))          ; compress consecutive occurrances
+	   (consumed (gensym)))                                  ; run-time bit counter
+      (list`(let* (,@(cadr relabels)
+		   (,consumed 0))
+	      ,@(make-bit cpattern consumed))))))
+
 
 
 ;; ---------- with-bitfields  ----------
@@ -343,8 +446,34 @@ PATTERN doesn't match N."
 	 (let-bindings (mapcar #'(lambda (s) (list s 0))
 			       syms))
 	 (escape (gensym))
-	 (decls-and-tests (generate-match-bitfield-code pattern n escape)))
+	 (decls-and-tests (generate-with-bitfields pattern n escape)))
     `(block ,escape
        (let ,let-bindings
 	 ,@decls-and-tests
 	 ,@body))))
+
+
+;; ---------- make-bitfields ----------
+
+(defmacro make-bitfields (pattern)
+  "Construct a value according to the bitfield PATTERN.
+
+The variables references in PATTERN should all be in scope. Literal 1
+and 0 symbols are mapped to those bits. Variables may appear several
+times, and their bits are extrated and placed into the value in the
+expected order.
+
+Width specifiers appear as pairs (x w) where x is a variable name and
+w a width in bits, which may be a constant, a variable, or a form.
+
+For example, if x = 10 (#2r1010), the pattern '(x x x 0) creates the
+value 4 (#2r100)."
+  (let* ((variables (extract-relabelling pattern))
+	 (let-bindings (mapcar (lambda (p) (list (cadr p) (car p)))
+			       variables))
+	 (result (gensym))
+	 (decls-and-shifts (generate-make-bitfields pattern result variables)))
+    `(let (,@let-bindings
+	   (,result 0))
+       ,@decls-and-shifts
+       ,result)))

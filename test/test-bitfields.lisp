@@ -248,59 +248,122 @@
   ;; the simplest case
   (let ((w 3))
     (is (equal (with-bitfields ((x w)) #2r1110
-					    x)
+		 x)
 	       #2r110))
 
     ;; more complicated cases
     (is (equal (with-bitfields (y (x w) z) #2r11101
-					    (list x y z))
+		 (list x y z))
 	       (list #2r110 1 1)))
     (is (equal (with-bitfields (y (x w) (x w) z) #2r11101011
-					    (list x y z))
+		 (list x y z))
 	       (list #2r110101 1 1)))
     (is (equal (with-bitfields (y (x w) 0 (x w) z) #2r111001011
-					    (list x y z))
+		 (list x y z))
 	       (list #2r110101 1 1)))
     (is (equal (with-bitfields (y (x w) 1 (x w) z) #2r111001011
-					    (list x y z))
+		 (list x y z))
 	       nil))
 
     ;; computed field widths
     (is (equal (with-bitfields (y (x (+ w 1)) (x w) z) #2r111101011
-					    (list x y z))
+		 (list x y z))
 	       (list #2r1110101 1 1)))
 
     ;; side-effects in calculations (do once, in order)
     (let ((v 1))
       (is (equal (with-bitfields ((x v)
-					       (y (setq v (1+ v)))
-					       (z (setq v (1+ v))))
-					      #2r110111
-					      (list x y z))
+				  (y (setq v (1+ v)))
+				  (z (setq v (1+ v))))
+		   #2r110111
+		   (list x y z))
 		 (list #2r1 #2r10 #2r111))))
     (let ((v 1))
       (is (equal (with-bitfields ((x v)
-					       (y (setq v (1+ v)))
-					       (y (setq v (1+ v))))
-					      #2r110111
-					      (list x y))
+				  (y (setq v (1+ v)))
+				  (y (setq v (1+ v))))
+		   #2r110111
+		   (list x y))
 		 (list #2r1 #2r10111))))
 
     ;; zero-width fields
     (let ((v 0))
       (is (equal (with-bitfields ((x v) y (x 3)) #2r110101
-					      (list x y))
+		   (list x y))
 		 (list #2r101 0))))
     (let ((v 0))
       (is (equal (with-bitfields ((x v) y) #2r110101
-					      (list x y))
+		   (list x y))
 		 (list 0 1))))
 
     ;; fields with nothing to match
     (let ((v 0))
       (is (equal (with-bitfields ((x v) (y v)) #2r110101
-					      (list x y))
+		   (list x y))
 		 (list 0 0))))
 
     ;; fail with negative or non-integer dynamic field widths
     ))
+
+
+  ;; ---------- make-bitfields ----------
+
+  (test test-make-single
+    "Test we can make simple bitfields."
+    ;; constants
+    (is (equal (make-bitfields (1))
+	       1))
+    (is (equal (make-bitfields (0))
+	       0))
+
+    ;; no don't care bits
+    (signals error
+      (make-bitfields (- 1)))
+
+    ;; single variable
+    (is (equal (let ((x #2r101))
+		 (make-bitfields (x x x)))
+	       #2r101))
+
+    ;; split single variable
+    (is (equal (let ((x #2r1001))
+		 (make-bitfields (x x x 0 x)))
+	       #2r10001)))
+
+(test test-make-width
+  "Test variable widths."
+  (is (equal (let ((x #2r1001))
+	       (make-bitfields ((x 3))))
+	     #2r001))
+  (is (equal (let ((x #2r1001))
+	       (make-bitfields ((x 3) 1)))
+	     #2r0011))
+  (is (equal (let ((x #2r1001))
+	       (make-bitfields ((x 3) 1 x)))
+	     #2r10011)))
+
+(test tes-make-variable-width
+  "Test we can make bitfields with variable widths."
+  (is (equal (let ((x #2r10110)
+		   (w 3))
+	       (make-bitfields ((x w) 1 x x)))
+	     #2r101110))
+  (is (equal (let ((x #2r10110)
+		   (y #2r10)
+		   (w 3)
+		   (v 2))
+	       (make-bitfields ((x w) 1 (y v))))
+	     #2r110110))
+
+  ;; zero-width fields
+  (is (equal (let ((x #2r10110)
+		   (w 0))
+	       (make-bitfields ((x w) 1 x x)))
+	     #2r110))
+
+  ;; side effects
+  (is (equal (let ((x #2r10110)
+		   (y #2r10)
+		   (w 0))
+	       (make-bitfields ((x (setq w (+ w 2))) 1 (y (setq w (1+ w))))))
+	     #2r101010)))
