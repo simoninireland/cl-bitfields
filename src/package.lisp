@@ -1,4 +1,4 @@
-;; cl-vhdsl.lisp: Package definition for cl-bitfields
+;; cl-bitfields.lisp: Package definition for cl-bitfields
 ;;
 ;; Copyright (C) 2023 Simon Dobson
 ;;
@@ -19,6 +19,7 @@
 
 (defpackage cl-bitfields
   (:use :cl)
-  (:export #:with-bitfields))
+  (:export #:with-bitfields
+	   #:make-bitfields))
 
 (in-package :cl-bitfields)
