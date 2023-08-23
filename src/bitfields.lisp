@@ -408,7 +408,7 @@ variables."
 	       `(let ((,losing '()))
 		  ,@checks
 		  (if (not (null ,losing))
-		      (signal 'information-lost :variables (list ,losing)))))))
+		      (signal 'information-lost :variables ,losing))))))
 
     (let* ((variables (extract-relabelling pattern))
 	   (let-bindings (mapcar (lambda (p) (list (cadr p) (car p)))
