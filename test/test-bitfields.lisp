@@ -401,7 +401,7 @@
 	       v)
 	     #2r10010))
 
-  ;; resukt of the construct itself
+  ;; result of the construct itself
   (is (equal (let ((v #2r10110))
 	       (list (with-bitfields-f (x x x 1 0) v
 		       (setq x #2r100))
