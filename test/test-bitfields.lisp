@@ -181,23 +181,23 @@
 (test test-destructuring-bind-several
   "Test the binding of several variables."
   (is (equal (with-bitfields (x y 0) #2r100
-					  (list x y))
+	       (list x y))
 	     (list 1 0)))
   (is (equal (with-bitfields (x x y 0) #2r1100
-					  (list x y))
+	       (list x y))
 	     (list #2r11 0)))
   (is (equal (with-bitfields (x x y y) #2r1101
-					  (list x y))
+	       (list x y))
 	     (list #2r11 1)))
 
   ;; intermingle with constants and wildcard bits
   (is (equal (with-bitfields (x x - - y y 1 0) #2r11011010
-					  (list x y))
+	       (list x y))
 	     (list #2r11 #2r10)))
 
   ;; occurrances can be interleaved (strange but legal)
   (is (equal (with-bitfields (x y x y) #2r1101
-					  (list x y))
+	       (list x y))
 	     (list #2r10 #2r11))))
 
 
@@ -236,12 +236,8 @@
 	     (list #2r101 0)))
   (is (equal (with-bitfields ((x 0) y (x 0)) #2r110101
 					  (list x y))
-	     (list 0 1)))
+	     (list 0 1))))
 
-  ;; fail on negative and non-integer field widths
-
-
-  )
 
 (test destructuring-bind-variable-width
   "Test that we can include expressions as field widths."
@@ -300,10 +296,7 @@
     (let ((v 0))
       (is (equal (with-bitfields ((x v) (y v)) #2r110101
 		   (list x y))
-		 (list 0 0))))
-
-    ;; fail with negative or non-integer dynamic field widths
-    ))
+		 (list 0 0))))))
 
 
   ;; ---------- make-bitfields ----------
@@ -330,8 +323,9 @@
 		 (make-bitfields (x x x 0 x)))
 	       #2r10001)))
 
+
 (test test-make-width
-  "Test variable widths."
+  "Test width specifiers."
   (is (equal (let ((x #2r1001))
 	       (make-bitfields ((x 3))))
 	     #2r001))
@@ -342,7 +336,7 @@
 	       (make-bitfields ((x 3) 1 x)))
 	     #2r10011)))
 
-(test tes-make-variable-width
+(test test-make-variable-width
   "Test we can make bitfields with variable widths."
   (is (equal (let ((x #2r10110)
 		   (w 3))
@@ -367,3 +361,131 @@
 		   (w 0))
 	       (make-bitfields ((x (setq w (+ w 2))) 1 (y (setq w (1+ w))))))
 	     #2r101010)))
+
+
+;; ---------- with-bitfields-f ----------
+
+(test test-with-bitfields-f-simple
+  "Test we can reconstruct simple patterns"
+  ;; single variable
+  (is (equal (let ((v #2r10110))
+	       (with-bitfields-f (x x x 1 0) v
+		 (setq x #2r100))
+	       v)
+	     #2r10010))
+
+  ;; resukt of the construct itself
+  (is (equal (let ((v #2r10110))
+	       (list (with-bitfields-f (x x x 1 0) v
+		       (setq x #2r100))
+		     v))
+	     (list #2r100 #2r10010)))
+
+  ;; test with-bitfields didn't generate these side effects
+  (is (equal (let ((v #2r10110))
+	       (with-bitfields (x x x 1 0) v
+		 (setq x #2r100))
+	       v)
+	     #2r10110))
+
+  ;; fail to deconstruct
+  (is (equal (let ((v #2r10111))
+	       (list (with-bitfields-f (x x x 1 0) v
+		       (setq x #2r100))
+		     v))
+	     (list nil #2r10111))))
+
+
+(test test-with-bitfields-f-multi
+  "Test multiple variables."
+  (is (equal (let ((v #2r10111))
+	       (list (with-bitfields-f (x x x y y) v
+		       (setq x #2r100)
+		       (setq y #2r00))
+		     v))
+	     (list #2r0 #2r10000)))
+  (is (equal (let ((v #2r10111))
+	       (list (with-bitfields-f (x x x 1 y y) v
+		       (setq x #2r100)
+		       (setq y #2r00))
+		     v))
+	     (list #2r0 #2r100100)))
+  (is (equal (let ((v #2r1011101))
+	       (with-bitfields-f (x x x 1 1 y y) v
+		 (setf x #2r000)
+		 (setf y #2r00))
+	       v)
+	     #2r0001100))
+  (is (equal (let ((v #2r10111))
+	       (list (with-bitfields-f (x x x y 1 y) v
+		       (setq x #2r100)
+		       (setq y #2r00))
+		     v))
+	     (list #2r0 #2r100010))))
+
+
+(test test-with-bitfields-f-width
+  "Test updates with width specifiers with side effects."
+  (is (equal (let ((v #2r10111)
+		   (w 2))
+	       (list (with-bitfields-f ((x (setq w (1+ w))) 1 (y (setq y (1- w)))) v
+		       (setq x #2r100)
+		       (setq y #2r00))
+		     v))
+	     (list #2r0 #2r100100))))
+
+
+;; ---------- setf-bitfields ----------
+
+(test test-setf-bitfields
+  "Test we can set bitfields to different places."
+  ;; to variables
+  (is (equal (let ((v 0)
+		   (x #2r111)
+		   (y #2r10))
+	       (setf-bitfields v (x x x y y))
+	       v)
+	     #2r11110))
+
+  ;; to the insides of lists
+  (is (equal (let* ((l '(1 2 3))
+		    (x #2r111)
+		    (y #2r10))
+	       (setf-bitfields (elt l 1) (x x x y y))
+	       l)
+	     (list 1 #2r11110 3)))
+
+  ;; to the slots of objects
+  ;; (also checks the general case of symbol-macrolet, since that's
+  ;; the mechanism for slots and accessors: should we do them explicitly anyway?)
+  (progn
+    (defclass slotter ()
+      ((a :initform 0
+	  :accessor slot-a)))
+
+    (is (equal (let ((o (make-instance 'slotter))
+		     (x #2r111)
+		     (y #2r10))
+		 (setf-bitfields (slot-a o) (x x x y y))
+		 (slot-a o))
+	       #2r11110))
+    (is (equal (let ((o (make-instance 'slotter))
+		     (x #2r111)
+		     (y #2r10))
+		 (with-slots (a) o
+		   (setf-bitfields a (x x x y y))
+		   (slot-a o)))    ; check the slot, not the abbreviation
+	       #2r11110))
+    (is (equal (let ((o (make-instance 'slotter))
+		     (x #2r111)
+		     (y #2r10))
+		 (with-accessors ((acc slot-a)) o
+		   (setf-bitfields acc (x x x y y))
+		   (slot-a o)))    ; check the slot, not the abbreviation
+	       #2r11110)))
+
+  ;; doesn't accept don't-care bits
+  (signals error
+    (let ((v 0)
+	  (x #2r111))
+      (setf-bitfields v (x x - x)))))

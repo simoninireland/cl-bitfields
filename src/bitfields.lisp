@@ -115,7 +115,10 @@ calculated widths into new variable bindings."
       (let* ((p (car pat))
 	     (r (compress-pattern (cdr pat)))
 	     (q (car r)))
-	(cond ((listp p)
+	(cond ((member p '(0 1 -))
+	       ;; literal bits left unchanged
+	       (cons p r))
+	      ((listp p)
 	       (cond ((equal (cadr p) 0)
 		      ;; (x 0) -> deleted
 		      r)
@@ -191,7 +194,7 @@ re-written, since such references can't generate side-effects."
 		   (if (symbolp (cadr p))
 		       ;; a variable reference that can't cause a side effects
 		       (list (cons p (car rest))
-			 (cadr rest))
+			     (cadr rest))
 
 		       ;; not a variable reference, re-write to a new variable
 		       (let ((nv (gensym)))
@@ -208,14 +211,20 @@ re-written, since such references can't generate side-effects."
 		     (cadr rest)))))))
 
 
-(defun generate-with-bitfields (pattern var escape)
-  "Construct a matching for PATTERN against variable VAR.
+(defun generate-with-bitfields-destructure (pattern var escape)
+  "Generate the code to destructure PATTERN from VAR.
 
-This function is the main code generator for
-`with-bitfields' that constructs the list of tests and
-assignments implied by the pattern. A list of assignments is returned,
-with any errors in pattern-matching at run-time resulting in a nil
-return from the block designated by ESCAPE."
+This function is the main code generator for `with-bitfields' that
+constructs the list of tests and assignments implied by the pattern. A
+list of assignments is returned, with any errors in pattern-matching
+at run-time resulting in a nil return from the block designated by
+ESCAPE.
+
+PATTERN should be side-effect-free, implying it has been passed
+through `relabel-pattern-width-specifiers' to convert any forms into
+variables.
+
+Any failures will generate a return to the block designanted ESCAPE."
   (labels ((match-bit (pat bits known computed)
 	     (if (null pat)
 		 '()
@@ -279,23 +288,17 @@ return from the block designated by ESCAPE."
 			     known
 			     (append computed (list wanted))))))))
 
-    (let* ((relabels (relabel-pattern-width-specifiers pattern)) ; extract computed widths as variables
-	   (cpattern (compress-pattern (car relabels)))          ; compress consecutive occurrances
-	   (bits (bits-in-pattern cpattern)))                    ; compute pattern width
+    (let* ((bits (bits-in-pattern pattern)))
       (if (numberp bits)
 	  ;; number of bits is known at compile-time, use constants
 	  (match-bit pattern (1- bits) 0 nil)
 
 	  ;; number of bits must be computed
 	  (let ((nob (gensym)))
-	    (let ((calc `((let ((,nob (1- ,(if (equal (length bits) 1)
-					   (car bits)
-					   bits))))
-			    ,@(match-bit (car relabels) nob 0 nil)))))
-	      (if (null (cadr relabels))
-		  calc
-		  `((let* ,(cadr relabels)   ; let* just in case the sequening really matters
-		       ,@calc)))))))))
+	    `((let ((,nob (1- ,(if (equal (length bits) 1)
+				   (car bits)
+				   bits))))
+		,@(match-bit pattern nob 0 nil))))))))
 
 
 (defun extract-relabelling (l)
@@ -335,22 +338,26 @@ let-bindings."
 	       (error "~S cannot appear in bitfield pattern" s))))))
 
 
-(defun generate-make-bitfields (pattern var vars)
-  "Construct to create the value described in PATTERN.
+(defun generate-make-bitfields-restructure (pattern var)
+  "Generate the code required to reconstruct PATTERN.
 
 This is the main code generator for `make-bitfields'. VARS is an alist
 mapping program variables to new variables, allowing the variables to
 be changed as the bitfield value is built. VAR is the working variable
-for the bitfield being built."
-  (labels ((make-bit (pat consumed)
+for the bitfield being built.
+
+PATTERN should be side-effect-free, implying it has been passed
+through `relabel-pattern-width-specifiers' to convert any forms into
+variables."
+  (labels ((make-bit (pat consumed vars)
 	     (if (null pat)
 		 '()
 		 (let* ((p (car pat))
-			(exs (make-bit (cdr pat) consumed)))
+			(exs (make-bit (cdr pat) consumed vars)))
 		   (if (listp p)
 		       ;; width specifier
 		       (let* ((n (car p))
-			      (nv (lookup-new-variable n))
+			      (nv (lookup-new-variable n vars))
 			      (w (cadr p))
 
 			      ;; optimise the cases where the widths are known
@@ -388,16 +395,16 @@ for the bitfield being built."
 					  `(setq ,consumed (1+ ,consumed)))))))))))
 
 	   ;; look-up the new corresponding to the old one
-	   (lookup-new-variable (n)
+	   (lookup-new-variable (n vars)
 	     (cadr (assoc n vars))))
 
-    (let* ((relabels (relabel-pattern-width-specifiers pattern)) ; extract computed widths as variables
-	   (cpattern (compress-pattern (car relabels)))          ; compress consecutive occurrances
-	   (consumed (gensym)))                                  ; run-time bit counter
-      (list`(let* (,@(cadr relabels)
-		   (,consumed 0))
-	      ,@(make-bit cpattern consumed))))))
-
+    (let* ((variables (extract-relabelling pattern))
+	   (let-bindings (mapcar (lambda (p) (list (cadr p) (car p)))
+				variables))
+	   (consumed (gensym)))
+      `(let (,@let-bindings
+	     (,consumed 0))
+	 ,@(make-bit pattern consumed variables)))))
 
 
 ;; ---------- with-bitfields  ----------
@@ -445,12 +452,21 @@ PATTERN doesn't match N."
   (let* ((syms (extract-symbols pattern))
 	 (let-bindings (mapcar #'(lambda (s) (list s 0))
 			       syms))
+	 (relabels (relabel-pattern-width-specifiers pattern))
+	 (cpattern (compress-pattern (car relabels)))
 	 (escape (gensym))
-	 (decls-and-tests (generate-with-bitfields pattern n escape)))
+	 (var (gensym))
+	 (decls-and-tests (generate-with-bitfields-destructure cpattern var escape))
+	 (matcher `(let (,@let-bindings
+			 (,var ,n))
+		     ,@decls-and-tests
+		     ,@body))
+	 (widths (if (null (cadr relabels))
+		     matcher
+		     `(let ,(cadr relabels)
+			,matcher))))
     `(block ,escape
-       (let ,let-bindings
-	 ,@decls-and-tests
-	 ,@body))))
+       ,widths)))
 
 
 ;; ---------- make-bitfields ----------
@@ -468,12 +484,65 @@ w a width in bits, which may be a constant, a variable, or a form.
 
 For example, if x = 10 (#2r1010), the pattern '(x x x 0) creates the
 value 4 (#2r100)."
-  (let* ((variables (extract-relabelling pattern))
-	 (let-bindings (mapcar (lambda (p) (list (cadr p) (car p)))
-			       variables))
+  (let* ((relabels (relabel-pattern-width-specifiers pattern))
+	 (cpattern (compress-pattern (car relabels)))
 	 (result (gensym))
-	 (decls-and-shifts (generate-make-bitfields pattern result variables)))
-    `(let (,@let-bindings
-	   (,result 0))
-       ,@decls-and-shifts
-       ,result)))
+	 (decls-and-shifts (generate-make-bitfields-restructure cpattern result))
+	 (matcher `(let ((,result 0))
+		     ,decls-and-shifts
+		     ,result))
+	 (widths (if (null (cadr relabels))
+		     matcher
+		     `(let ,(cadr relabels)
+			,matcher))))
+    widths))
+
+
+;; ---------- setf-bitfields ----------
+
+(defmacro setf-bitfields (v pattern)
+  "Set the place identified by V to the bitfields constructed from PATTERN.
+
+This is shorthand for '(setf V (make-bitfields pattern))'."
+  `(setf ,v (make-bitfields ,pattern)))
+
+
+;; ---------- with-bitfields-f ----------
+
+(defmacro with-bitfields-f (pattern n &rest body)
+  "Destructure N according to pattern, then re-create it from values changed by BODY.
+
+N must designate a place suitable to be assigned to by `setf'. The
+value of N is first destructured using PATTERN (as used in
+`with-bindings', creating variables that are in scope for the forms in
+BODY. Oce all the BODY forms have been executed, N is re-created using
+PATTERN in the manner of `make-bitfields'.
+
+If N cannot be destructured according to PATTERN, `with-bitfields-f'
+returns nil. Otherwise it returns the value of the last BODY form."
+  (let* ((syms (extract-symbols pattern))
+	 (let-bindings (mapcar #'(lambda (s) (list s 0))
+			       syms))
+	 (relabels (relabel-pattern-width-specifiers pattern))
+	 (cpattern (compress-pattern (car relabels)))
+	 (escape (gensym))
+	 (var (gensym))
+	 (decls-and-tests (generate-with-bitfields-destructure cpattern var escape))
+	 (result (gensym))
+	 (update (gensym))
+	 (decls-and-shifts (generate-make-bitfields-restructure cpattern update))
+	 (matcher `(let (,@let-bindings
+			 (,var ,n))
+		     ,@decls-and-tests
+		     (let ((,result (progn
+				      ,@body))
+			   (,update 0))
+		       ,decls-and-shifts
+		       (setf ,n ,update)
+		       ,result)))
+	 (widths (if (null (cadr relabels))
+		     matcher
+		     `(let ,(cadr relabels)
+			,matcher))))
+    `(block ,escape
+       ,widths)))

@@ -20,6 +20,8 @@
 (defpackage cl-bitfields
   (:use :cl)
   (:export #:with-bitfields
+	   #:with-bitfields-f
+	   #:setf-bitfields
 	   #:make-bitfields))
 
 (in-package :cl-bitfields)
