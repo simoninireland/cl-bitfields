@@ -206,6 +206,19 @@
    information loss to be reported, or to stop computation in order to
    fix a problem.
 
+   The names of the variables that have lost information are available
+   through the ~information-lost-from~ function on the condition. The
+   variables appear in the same order as they appear in the pattern.
+
+   The ~information-lost-warning~ function provides a standard warning
+   handler for reporting information loss. For example:
+
+   #+begin_src lisp
+(handler-bind ((information-lost #'information-lost-warning))
+  (let ((x #2r111))
+    (make-bitfields (x x))))
+   #+end_src
+
 ** Side effects and failed matches
 
    All width specification calculations are done before any pattern
