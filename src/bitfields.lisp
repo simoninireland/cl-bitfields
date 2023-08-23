@@ -403,7 +403,7 @@ variables."
 	     (let* ((losing (gensym))
 		    (checks (mapcar (lambda (v)
 				      `(if (not (equal ,(cadr v) 0))
-					   (setf ,losing (cons ',(car v) ,losing))))
+					   (setf ,losing (append ,losing (list ',(car v))))))
 				    vars)))
 	       `(let ((,losing '()))
 		  ,@checks
