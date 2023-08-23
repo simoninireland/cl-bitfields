@@ -29,4 +29,4 @@
 
 (defun informtion-lost-warning (c)
   "Display a warning about loss of information."
-  (print (format nil "Information lost in bitfield from variables ~A" (informtion-lost-from c))))
+  (format t "Information lost in bitfield from variables ~A" (informtion-lost-from c)))
