@@ -180,7 +180,7 @@
    they were originally destructured. Don't-care bits are not accepted
    in the pattern.
 
-** ~informtation-lost~: Non-zero bits have been dropped when building bitfields
+** ~information-lost~: Non-zero bits have been dropped when building bitfields
 
    Consider the following pattern:
 
