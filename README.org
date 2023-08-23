@@ -10,13 +10,13 @@
   operations in a Lisp-like fashion:
 
   - ~with-bitfields~ :: A destructuring bind of a bitfield pattern
-    into new variables that are in scope for the body forms;
+    into new variables that are in scope for the body forms
   - ~make-bitfields~ :: The opposite operation, constructing a
-    bitfield value from a pattern using variables already existing;
-    and
-  - ~with-bitfields-f~ :: A combination of both that writes any
-    changes made to the variables in the pattern back into the value
-    that was destructured.
+    bitfield value from a pattern using variables already existing
+  - ~setf-bitfields~ :: Set a place from a bitfield pattern
+  - ~with-bitfields-f~ :: Roughly like ~with-bitfields~ followed by
+    ~setf-bitfields~ that writes any changes made to the variables in
+    the pattern back into the value that was destructured.
 
 ** ~with-bitfields~: Destructuring bind of bitfields
 
@@ -63,13 +63,16 @@
     or #2r11011100, for example: the value of the first bit is a
     don't-care.
 
+    Don't care bits can /only/ appear in ~with-bitfields~ patterns,
+    and /not/ in those of the other macros.
+
 *** Width specifiers
 
     Having the repeated occurrences of ~x~ and ~y~ are often useful
     because they make the destructuring of the bitfield obvious. They
     can however be hard to read in some cases, so patterns with
     several consecutive bits being bound can also be phrased in terms
-    of /field width specifiers/:
+    of /width specifiers/:
 
     #+begin_src lisp
 (with-bitfields (1 1 0 (x 3) (y 2)) opcode
@@ -132,17 +135,58 @@
    ~x~, followed by the two highest-order bits from ~y~, followed by the
    lowest-order bit of ~x~, followed by 1.
 
+** ~setf-bitfields~: Set a place with bitfields
+
+   Stores the value constructed from a bitfields pattern to a place.
+   Assuming ~v~ designates somewhere ~setf~-able, the form:
+
+   #+begin_src lisp
+(let ((x #2r110)
+      (y #2r11))
+  (setf-bitfields v (x x x y y)))
+   #+end_src
+
+   will update ~v~ with the value #2r11011. ~setf~-able places include
+   variables, elements of lists and sequences (using ~elt~), and the
+   slots of CLOS objects (including those identified with the
+   ~with-slots~ and ~with-accessors~ macros). As with
+   ~make-bitfields~, don't-care bits are not accepted in the pattern.
+
 ** ~with-bitfields-f~: Destructure and update bitfields
 
    ~with-bitfields-f~ acts rather like a combination of a
    destructuring bind using ~with-bitfields~ followed by an update
    in-place of the value that was destructured in the form of
-   ~make-bitfields~. Changes made to the variables captured in the
+   ~setf-bitfields~. Changes made to the variables captured in the
    destructuring pattern are applied back to the value from which they
-   were destructured.
+   were destructured. For example:
 
-   ...
+   #+begin_src lisp
+(let ((v #2r1011101))
+  (with-bitfields-f (x x x 1 1 y y) v
+    (setf x #2r000)
+    (setf y #2r00))
+  v)
+   #+end_src
 
+   will return #2r0001100: The value of ~v~ will be reconstructed from
+   the updated values of ~x~ and ~y~ according to the pattern by which
+   they were originally destructured. Don't-care bits are not accepted
+   in the pattern.
+
+** Side effects and failed matches
+
+   All width specification calculations are done before any pattern
+   matching. This detail is irrelevant /unless/ the width specifier
+   calculations include side effects, in which case all those side
+   effects will happen even if the pattern fails to match (and
+   therefore returns ~nil~).
+
+   This is intended behaviour: the alternative is to expand widths
+   only as they are matched, but this makes the mental model of what
+   side effects will and won't occur quite problematic. The easiest
+   way to avoid any possible issue is to avoid side-effecting width
+   specifiers.
 
 ** Author
 
