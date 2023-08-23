@@ -438,13 +438,14 @@ For example, the pattern '(x x x 0), when matched against the number
 10 (#2r1010), will bind x to 5 (#2r101), the bits in the corresponding
 positions. The same pattern matched against 11
 (#2r1011) will fail because the rightmost bits of the number and the
-pattern don't match. The following patterns are all the same:
+pattern don't match. In an environment with `w = 3' and `v = 2' the
+following patterns are all the same:
 
-   - '(x x x 0)
-   - '((x 3) 0)
-   - (let ((w 3)) '((x w) 0))
-   - (let ((w 2)) '((x w) x 0)
-   - (let ((w 2)) '((w (+1 w)) 0)
+   - (x x x 0)
+   - ((x 3) 0)
+   - ((x w) 0))
+   - ((x v) x 0)
+   - ((x (+1 v)) 0)
 
 WITH-BITFIELDS returns the value of executing BODY in an
 environment extended by the extracted variables (if any), or nil if
