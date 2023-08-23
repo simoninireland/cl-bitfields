@@ -365,9 +365,29 @@
 
 (test test-information-lost
   "Test that we signal a loss of information."
+  ;; basic condition signalling
   (signals information-lost
     (let ((x #2r111))
-      (make-bitfields ((x 2))))))
+      (make-bitfields ((x 2)))))
+
+  ;; check the right variales are included in the condition
+  (handler-bind ((information-lost (lambda (c)
+				     (is (equal (information-lost-from c)
+						'(x))))))
+    (let ((x #2r111))
+      (make-bitfields ((x 2)))))
+  (handler-bind ((information-lost (lambda (c)
+				     (is (equal (information-lost-from c)
+						'(y))))))
+    (let ((x #2r111)
+	  (y #2r11))
+      (make-bitfields ((x 3) y))))
+  (handler-bind ((information-lost (lambda (c)
+				     (is (equal (information-lost-from c)
+						'(x y))))))
+    (let ((x #2r111)
+	  (y #2r11))
+      (make-bitfields ((x 2) y)))))
 
 
 ;; ---------- with-bitfields-f ----------
