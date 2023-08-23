@@ -1,4 +1,4 @@
-;; cl-bitfields.lisp: Package definition for cl-bitfields
+;; conditions.lisp: Conditions signalled by bitfield operations
 ;;
 ;; Copyright (C) 2023 Simon Dobson
 ;;
@@ -17,14 +17,16 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with cl-bitfields. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(defpackage cl-bitfields
-  (:use :cl)
-  (:export #:with-bitfields
-	   #:with-bitfields-f
-	   #:setf-bitfields
-	   #:make-bitfields
-	   #:information-lost
-	   #:information-lost-from
-	   #:information-lost-warning))
-
 (in-package :cl-bitfields)
+
+;; ---------- Information lost condition ----------
+
+(define-condition information-lost ()
+  ((var :initarg :variables
+	:reader information-lost-from))
+  (:documentation "Signalled when information in a variable is not written out in a bitfield pattern."))
+
+
+(defun informtion-lost-warning (c)
+  "Display a warning about loss of information."
+  (print (format nil "Information lost in bitfield from variables ~A" (informtion-lost-from c))))

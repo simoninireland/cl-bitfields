@@ -234,7 +234,7 @@ Any failures will generate a return to the block designanted ESCAPE."
 		       (let ((n (car p))
 			     (w (cadr p)))
 			 (let ((exs (generate-extract bits w known computed)))
-			   (cons `(setq ,n (+ ,(car exs)
+			   (cons `(setf ,n (+ ,(car exs)
 					      (ash ,n ,w)))
 				 (match-bit (cdr pat) bits (cadr exs) (caddr exs)))))
 
@@ -253,7 +253,7 @@ Any failures will generate a return to the block designanted ESCAPE."
 
 			   ;; a symbol binds the bit in that variable
 			   (otherwise
-			    (cons `(setq ,p (+ ,(car exs)
+			    (cons `(setf ,p (+ ,(car exs)
 					       (ash ,p 1)))
 				  (match-bit (cdr pat) bits (cadr exs) (caddr exs))))))))))
 
@@ -367,23 +367,23 @@ variables."
 			      (shift (if (numberp w)
 					 (- w)
 					 `(- ,w))))
-			 (append exs (list `(setq ,var (logior ,var
+			 (append exs (list `(setf ,var (logior ,var
 							       (ash (logand ,nv ,mask) ,consumed)))
-					   `(setq ,nv (ash ,nv ,shift))
-					   `(setq ,consumed (+ ,consumed ,w)))))
+					   `(setf ,nv (ash ,nv ,shift))
+					   `(incf ,consumed ,w))))
 
 		       ;; single-bit match
 		       (case p
 			 ;; 0 simply shifts the number of known bits
 			 (0
 			  (append exs
-				  (list `(setq ,consumed (1+ ,consumed)))))
+				  (list `(incf ,consumed))))
 
 			 ;; one
 			 (1
 			  (append exs
 				  (list `(setq ,var (logior ,var (ash 1 ,consumed)))
-					`(setq ,consumed (1+ ,consumed)))))
+					`(incf ,consumed))))
 
 			 ;; symbol has bit extracted
 			 (otherwise
@@ -392,19 +392,32 @@ variables."
 				    (list `(setq ,var (logior ,var
 							      (ash  (logand ,nv 1) ,consumed)))
 					  `(setq ,nv (ash ,nv -1))
-					  `(setq ,consumed (1+ ,consumed)))))))))))
+					  `(incf ,consumed))))))))))
 
 	   ;; look-up the new corresponding to the old one
 	   (lookup-new-variable (n vars)
-	     (cadr (assoc n vars))))
+	     (cadr (assoc n vars)))
+
+	   ;; generate code to check for information loss
+	   (generate-information-check (vars)
+	     (let* ((losing (gensym))
+		    (checks (mapcar (lambda (v)
+				      `(if (not (equal ,(cadr v) 0))
+					   (setf ,losing (cons ',(car v) ,losing))))
+				    vars)))
+	       `(let ((,losing '()))
+		  ,@checks
+		  (if (not (null ,losing))
+		      (signal 'information-lost :variables (list ,losing)))))))
 
     (let* ((variables (extract-relabelling pattern))
 	   (let-bindings (mapcar (lambda (p) (list (cadr p) (car p)))
-				variables))
+				 variables))
 	   (consumed (gensym)))
       `(let (,@let-bindings
 	     (,consumed 0))
-	 ,@(make-bit pattern consumed variables)))))
+	 ,@(make-bit pattern consumed variables)
+	 ,(generate-information-check variables)))))
 
 
 ;; ---------- with-bitfields  ----------

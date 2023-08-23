@@ -363,6 +363,13 @@
 	     #2r101010)))
 
 
+(test test-information-lost
+  "Test that we signal a loss of information."
+  (signals information-lost
+    (let ((x #2r111))
+      (make-bitfields ((x 2))))))
+
+
 ;; ---------- with-bitfields-f ----------
 
 (test test-with-bitfields-f-simple

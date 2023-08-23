@@ -24,7 +24,9 @@
   :license "GPL3"
   :depends-on ("alexandria")
   :pathname "src/"
+  :serial t
   :components ((:file "package")
+	       (:file "conditions")
 	       (:file "bitfields"))
   :in-order-to ((test-op (test-op "cl-bitfields/test"))))
 

@@ -6,7 +6,7 @@
   way, as some bits defining the operation, some others the addressing
   mode or literal data, and so forth.
 
-  This library provides three macros that attempt to provide bitfield
+  This library provides four macros that attempt to provide bitfield
   operations in a Lisp-like fashion:
 
   - ~with-bitfields~ :: A destructuring bind of a bitfield pattern
@@ -17,6 +17,12 @@
   - ~with-bitfields-f~ :: Roughly like ~with-bitfields~ followed by
     ~setf-bitfields~ that writes any changes made to the variables in
     the pattern back into the value that was destructured.
+
+
+  It also defines one condition:
+
+  - ~information-lost~ :: Signalled when non-zero bits in a variable
+    are not elaborated within a pattern.
 
 ** ~with-bitfields~: Destructuring bind of bitfields
 
@@ -174,19 +180,48 @@
    they were originally destructured. Don't-care bits are not accepted
    in the pattern.
 
+** ~informtation-lost~: Non-zero bits have been dropped when building bitfields
+
+   Consider the following pattern:
+
+   #+begin_src lisp
+(let ((v #2r10110))
+  (with-bitfields-f (x x y y y) v
+    (setf x #2r111))
+  v)
+   #+end_src
+
+   This will set ~v~ to #2r11110, taking two low-bits from ~x~
+   according to the pattern by which is was destructured. But ~x~
+   includes another, high-order bit that isn't consumed when
+   reconstructing the pattern: information is potentially lost. This
+   can be a perfectly benign situation, but it can also indicate a
+   run-time problem. (A common example is that ~x~ represents a
+   fixed-width register and an arithmetic operation has accidentally
+   generated a carry out of its high-order bit.)
+
+   In these cases the ~information-lost~ condition is signalled. This
+   contains a list of variables that have non-zero bits that have not
+   been used in constructing a bitfield using a pattern. This allows
+   information loss to be reported, or to stop computation in order to
+   fix a problem.
+
 ** Side effects and failed matches
 
    All width specification calculations are done before any pattern
-   matching. This detail is irrelevant /unless/ the width specifier
-   calculations include side effects, in which case all those side
-   effects will happen even if the pattern fails to match (and
-   therefore returns ~nil~).
+   matching.
+
+   This detail is irrelevant *unless* the width specifier calculations
+   include side effects, in which case all those side effects will
+   happen even if the pattern fails to match (and therefore returns
+   ~nil~).
 
    This is intended behaviour: the alternative is to expand widths
    only as they are matched, but this makes the mental model of what
    side effects will and won't occur quite problematic. The easiest
    way to avoid any possible issue is to avoid side-effecting width
-   specifiers.
+   specifiers. I can't imagine a case in which this wouldn't be
+   possible.
 
 ** Author
 
